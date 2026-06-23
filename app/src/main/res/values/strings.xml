@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">AutoVPN</string>
+    <string name="notif_channel">Мониторинг приложений</string>
+    <string name="notif_title">Автозапуск VPN активен</string>
+    <string name="notif_text">Слежу за выбранными приложениями</string>
+</resources>

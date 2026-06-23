@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Базовая XML-тема нужна только до старта Compose (splash-кадр, статус-бар).
+         Все цвета UI задаются в Compose-теме (ui/theme/Theme.kt). -->
+    <style name="Theme.AutoVpn" parent="android:Theme.Material.DayNight.NoActionBar">
+        <item name="android:windowBackground">@color/surface_background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+    </style>
+</resources>

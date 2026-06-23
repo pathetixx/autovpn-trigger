@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- ── Разрешения ─────────────────────────────────────────────────────────
+         PACKAGE_USAGE_STATS — особое (signature|appop). Через runtime-диалог НЕ
+         выдаётся: пользователь включает доступ вручную в Настройках. Поэтому помечаем
+         tools:ignore, иначе линт ругается на «ProtectedPermissions». -->
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
+
+    <!-- Foreground Service + его тип. SPECIAL_USE — честный тип для «мониторинга
+         переднего плана»: ни один из штатных типов (dataSync/location/...) сюда не
+         подходит. Для сайдлоада это рабочий вариант. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+
+    <!-- POST_NOTIFICATIONS — runtime-разрешение с Android 13. Без него уведомление
+         foreground-сервиса не показывается (сам сервис продолжает работать). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Перезапуск мониторинга после ребута устройства. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- Выход из-под Doze/энергосбережения, чтобы система не душила foreground-службу. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <!-- Нужно, чтобы перечислить установленные приложения для списка/выбора VPN.
+         На Google Play требует декларации; для приватного сайдлоада — ок. -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
+
+    <application
+        android:name=".AutoVpnApp"
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.AutoVpn">
+
+        <activity
+            android:name=".ui.MainActivity"
+            android:exported="true"
+            android:theme="@style/Theme.AutoVpn">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Ядро автоматизации. exported=false — стартуем только изнутри приложения. -->
+        <service
+            android:name=".service.AppMonitorService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="foreground_app_monitor_for_vpn_automation" />
+        </service>
+
+        <receiver
+            android:name=".service.BootReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>
