@@ -9,6 +9,9 @@ interface SettingsRepository {
     suspend fun setAutomationEnabled(enabled: Boolean)
     suspend fun setVpnPackage(packageName: String?)
 
+    /** Переопределить broadcast-экшен тумблера (по умолчанию — виджет Happ). */
+    suspend fun setToggleAction(action: String)
+
     /** Сохранить способ коннекта (режим + компонент), найденный в диагностике. */
     suspend fun setConnectTarget(mode: LaunchMode, component: String?)
 }

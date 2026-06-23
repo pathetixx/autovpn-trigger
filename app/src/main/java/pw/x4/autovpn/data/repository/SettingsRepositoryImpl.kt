@@ -18,6 +18,8 @@ class SettingsRepositoryImpl(
         AutomationSettings(
             automationEnabled = prefs[SettingsKeys.AUTOMATION_ENABLED] ?: false,
             vpnPackage = prefs[SettingsKeys.VPN_PACKAGE],
+            toggleAction = prefs[SettingsKeys.TOGGLE_ACTION]
+                ?: AutomationSettings.DEFAULT_TOGGLE_ACTION,
             connectMode = prefs[SettingsKeys.CONNECT_MODE]
                 ?.let { runCatching { LaunchMode.valueOf(it) }.getOrNull() }
                 ?: LaunchMode.OPEN_APP,
@@ -34,6 +36,10 @@ class SettingsRepositoryImpl(
             if (packageName.isNullOrBlank()) prefs.remove(SettingsKeys.VPN_PACKAGE)
             else prefs[SettingsKeys.VPN_PACKAGE] = packageName
         }
+    }
+
+    override suspend fun setToggleAction(action: String) {
+        dataStore.edit { it[SettingsKeys.TOGGLE_ACTION] = action }
     }
 
     override suspend fun setConnectTarget(mode: LaunchMode, component: String?) {

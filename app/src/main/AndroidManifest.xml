@@ -22,6 +22,9 @@
     <!-- Перезапуск мониторинга после ребута устройства. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+    <!-- Для ConnectivityManager: проверяем, есть ли активная сеть с TRANSPORT_VPN. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
     <!-- Выход из-под Doze/энергосбережения, чтобы система не душила foreground-службу. -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 

@@ -7,8 +7,14 @@ data class AutomationSettings(
     val automationEnabled: Boolean = false,
     /** Пакет VPN-приложения (например, com.happproxy). */
     val vpnPackage: String? = null,
-    /** Как именно дёргать VPN. OPEN_APP = просто открыть (по умолчанию). */
+    /** Broadcast-экшен тумблера VPN. По умолчанию — виджет Happ. */
+    val toggleAction: String = DEFAULT_TOGGLE_ACTION,
+    /** Поля диагностики (запасной путь «launch/silent-компонент»), основной поток их не использует. */
     val connectMode: LaunchMode = LaunchMode.OPEN_APP,
-    /** FQN компонента для тихого коннекта (Service/Receiver/Activity), если найден в диагностике. */
     val connectComponent: String? = null,
-)
+) {
+    companion object {
+        /** Имитация нажатия виджета Happ — фоновый тумблер VPN без UI. */
+        const val DEFAULT_TOGGLE_ACTION = "com.happproxy.action.widget.click"
+    }
+}

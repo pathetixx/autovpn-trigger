@@ -9,6 +9,7 @@ import pw.x4.autovpn.data.local.AppDatabase
 import pw.x4.autovpn.data.local.settingsDataStore
 import pw.x4.autovpn.data.repository.SettingsRepositoryImpl
 import pw.x4.autovpn.data.repository.TriggerRepositoryImpl
+import pw.x4.autovpn.data.vpn.BroadcastVpnTrigger
 import pw.x4.autovpn.data.vpn.IntentVpnTrigger
 import pw.x4.autovpn.domain.repository.SettingsRepository
 import pw.x4.autovpn.domain.repository.TriggerRepository
@@ -42,6 +43,10 @@ class AppContainer(context: Context) {
     }
     val vpnTrigger: VpnTrigger by lazy {
         IntentVpnTrigger(appContext)
+    }
+    // Основной путь тихого коннекта: broadcast-тумблер VPN (без UI).
+    val broadcastVpnTrigger by lazy {
+        BroadcastVpnTrigger(appContext)
     }
 }
 
