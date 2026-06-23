@@ -7,7 +7,6 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
@@ -49,17 +48,11 @@ class AppMonitorService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val container by lazy { (application as AutoVpnApp).container }
 
-    // Пакет лаунчера (домашний экран) — определяем один раз, это «нейтральный» экран.
-    private val launcherPackage: String? by lazy {
-        val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
-        packageManager.resolveActivity(home, PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName
-    }
-
-    // Состояние автомата.
-    private var ownsVpn = false       // VPN включили МЫ — только такой авто-выключаем
-    private var offPending = false
-    private var offPendingSince = 0L  // когда впервые увидели экран «закрытия» (домой/Недавние)
-    private var cooldownUntil = 0L    // до этого момента не трогаем VPN (ждём смены состояния)
+    // Локальный кэш состояния VPN — решения строим на нём, реальный CM дёргаем лишь
+    // периодически (ловим ручное вкл/выкл) и не во время «перехода» после тумбла.
+    private var lastKnownVpnState: Boolean? = null
+    private var lastSyncAt = 0L
+    private var transitionUntil = 0L
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -91,56 +84,50 @@ class AppMonitorService : Service() {
         }
     }
 
-    /** Один такт автомата. */
+    /**
+     * Один такт автомата — строгая детерминированная логика Target / Neutral / Other.
+     * Без дебаунса: сама категоризация фокусного пакета гасит дребезг.
+     */
     private suspend fun evaluate(settings: AutomationSettings) {
         val vpnPackage = settings.vpnPackage ?: return // нечего тумблить
         val current = container.foregroundAppDetector.currentForegroundPackage() ?: return
         val now = SystemClock.elapsedRealtime()
-        val vpnOn = VpnStateChecker.isVpnActive(this)
 
-        // VPN выключился (в т.ч. вручную) — мы им больше не «владеем».
-        if (!vpnOn) ownsVpn = false
-
-        // Точка 3: VPN включён НЕ нами (вручную из Happ) → совсем не вмешиваемся,
-        // триггеры молчат — пользователь гоняет VPN на что угодно вне правил.
-        if (vpnOn && !ownsVpn) return
-
-        if (now < cooldownUntil) return // после тумбла ждём, пока VPN реально переключится
-
-        val isTrigger = container.triggerRepository.isTriggerApp(current)
-
-        // ВКЛючение: вошли в триггер при выключенном VPN — реагируем сразу.
-        if (isTrigger && !vpnOn) {
-            offPending = false
-            container.broadcastVpnTrigger.sendToggle(vpnPackage, settings.toggleAction)
-            ownsVpn = true
-            cooldownUntil = now + TOGGLE_COOLDOWN_MS
-            toast("VPN: включаю")
-            return
+        // Синхронизация кэша с реальным состоянием: при старте, периодически (ловим
+        // ручное вкл/выкл) — но НЕ во время перехода после тумбла (CM ещё врёт).
+        if (lastKnownVpnState == null ||
+            (now >= transitionUntil && now - lastSyncAt >= SYNC_INTERVAL_MS)
+        ) {
+            lastKnownVpnState = VpnStateChecker.isVpnActive(this)
+            lastSyncAt = now
         }
+        val vpnOn = lastKnownVpnState == true
 
-        // ВЫКлючение: только наш VPN и только когда пользователь ушёл «закрывать» —
-        // на домашний экран или в «Недавние». Переключение в ДРУГОЕ приложение VPN не гасит.
-        if (ownsVpn && vpnOn) {
-            val leavingToClose = current == launcherPackage || current == SYSTEM_UI_PACKAGE
-            if (leavingToClose) {
-                if (!offPending) {
-                    offPending = true
-                    offPendingSince = now
-                    return
-                }
-                if (now - offPendingSince >= OFF_DEBOUNCE_MS) {
-                    offPending = false
-                    container.broadcastVpnTrigger.sendToggle(vpnPackage, settings.toggleAction)
-                    ownsVpn = false
-                    cooldownUntil = now + TOGGLE_COOLDOWN_MS
-                    toast("VPN: выключаю")
-                }
-            } else {
-                // Любое приложение (триггер или нет) — это «использование», держим VPN.
-                offPending = false
+        when {
+            // NeutralApps — наше приложение, сам VPN, системный UI (шторка/Недавние).
+            // Состояние не трогаем, чтобы они не сбивали логику.
+            current == packageName ||
+                current == vpnPackage ||
+                current == SYSTEM_UI_PACKAGE -> return
+
+            // TargetApps + VPN выключен → включаем.
+            container.triggerRepository.isTriggerApp(current) -> {
+                if (!vpnOn) applyToggle(vpnPackage, settings.toggleAction, turnOn = true, now)
+            }
+
+            // AnyOtherApp + VPN включён → выключаем.
+            else -> {
+                if (vpnOn) applyToggle(vpnPackage, settings.toggleAction, turnOn = false, now)
             }
         }
+    }
+
+    private suspend fun applyToggle(vpnPackage: String, action: String, turnOn: Boolean, now: Long) {
+        container.broadcastVpnTrigger.sendToggle(vpnPackage, action)
+        lastKnownVpnState = turnOn          // обновляем кэш сразу после отправки
+        transitionUntil = now + TRANSITION_MS
+        lastSyncAt = now
+        toast(if (turnOn) "VPN: включаю" else "VPN: выключаю")
     }
 
     override fun onDestroy() {
@@ -188,9 +175,9 @@ class AppMonitorService : Service() {
     companion object {
         private const val NOTIFICATION_ID = 1001
         private const val CHANNEL_ID = "vpn_automation"
-        private const val POLL_INTERVAL_MS = 800L       // быстрый отклик на вход в триггер
-        private const val OFF_DEBOUNCE_MS = 2_500L      // держим на «домой/Недавние» до выключения (антидребезг)
-        private const val TOGGLE_COOLDOWN_MS = 8_000L   // после тумбла даём VPN устаканиться (Happ под троттлом коннектится не мгновенно)
+        private const val POLL_INTERVAL_MS = 1_500L     // 1.5с достаточно; Target/Neutral/Other сам гасит дребезг
+        private const val SYNC_INTERVAL_MS = 4_500L     // как часто сверяем кэш с реальным CM (ловим ручное вкл/выкл)
+        private const val TRANSITION_MS = 7_000L        // после тумбла CM врёт (Happ коннектится) — верим кэшу
         private const val SYSTEM_UI_PACKAGE = "com.android.systemui"
 
         fun start(context: Context) {
