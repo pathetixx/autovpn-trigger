@@ -62,6 +62,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             usageAccess = PermissionUtils.hasUsageAccess(getApplication()),
             notifications = PermissionUtils.hasNotificationPermission(getApplication()),
             batteryUnrestricted = PermissionUtils.isIgnoringBatteryOptimizations(getApplication()),
+            canDrawOverlays = PermissionUtils.canDrawOverlays(getApplication()),
         )
     }
 

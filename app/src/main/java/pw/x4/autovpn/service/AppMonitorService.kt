@@ -10,6 +10,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
@@ -21,6 +22,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import pw.x4.autovpn.AutoVpnApp
 import pw.x4.autovpn.R
 import pw.x4.autovpn.domain.model.AutomationSettings
@@ -94,13 +96,24 @@ class AppMonitorService : Service() {
 
         if (container.triggerRepository.isTriggerApp(packageName)) {
             if (packageName != lastTriggeredPackage) {
-                container.vpnTrigger.launch(settings.vpnPackage)
+                val launched = container.vpnTrigger.launch(settings.vpnPackage)
+                // Диагностика. ВАЖНО: при блокировке запуска из фона startActivity НЕ кидает
+                // исключение — launched=true, но окно не открывается (нужен overlay-доступ).
+                // launched=false = VPN-приложение реально не найдено по пакету.
+                toast(
+                    if (launched) "AutoVPN: триггер сработал → шлю запуск VPN"
+                    else "AutoVPN: VPN-приложение не найдено (пакет?)",
+                )
                 lastTriggeredPackage = packageName
             }
         } else {
             // Фокус ушёл из триггера → при следующем входе снова разрешаем запуск.
             lastTriggeredPackage = null
         }
+    }
+
+    private suspend fun toast(message: String) = withContext(Dispatchers.Main) {
+        Toast.makeText(this@AppMonitorService, message, Toast.LENGTH_SHORT).show()
     }
 
     override fun onDestroy() {

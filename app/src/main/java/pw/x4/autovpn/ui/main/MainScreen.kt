@@ -72,6 +72,11 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
         ActivityResultContracts.StartActivityForResult(),
     ) { viewModel.refreshPermissions() }
 
+    // Экран «показ поверх других приложений» — снимает блокировку запуска из фона.
+    val overlayLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { viewModel.refreshPermissions() }
+
     var showVpnPicker by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -86,6 +91,13 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
             )
 
             // ── Карточки недостающих разрешений ─────────────────────────────
+            if (!state.permissions.canDrawOverlays) {
+                PermissionCard(
+                    text = "Разрешите «показ поверх других приложений» — без этого Android блокирует запуск VPN из фона.",
+                    actionLabel = "Разрешить",
+                    onAction = { overlayLauncher.launch(PermissionUtils.manageOverlayPermissionIntent(context)) },
+                )
+            }
             if (!state.permissions.usageAccess) {
                 PermissionCard(
                     text = "Нужен «Доступ к данным об использовании», чтобы определять открытое приложение.",

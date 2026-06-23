@@ -25,6 +25,11 @@
     <!-- Выход из-под Doze/энергосбережения, чтобы система не душила foreground-службу. -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
+    <!-- КЛЮЧЕВОЕ для запуска: с Android 10 нельзя стартовать Activity из фона.
+         «Показ поверх других приложений» снимает это ограничение — без него
+         startActivity(VPN) из сервиса молча игнорируется системой. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
     <!-- Нужно, чтобы перечислить установленные приложения для списка/выбора VPN.
          На Google Play требует декларации; для приватного сайдлоада — ок. -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
