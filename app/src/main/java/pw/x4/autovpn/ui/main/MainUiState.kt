@@ -9,8 +9,6 @@ data class PermissionState(
     val notifications: Boolean = false,
     // true = в белом списке батареи (по умолчанию true, чтобы не мигать карточкой до проверки).
     val batteryUnrestricted: Boolean = true,
-    // true = разрешён показ поверх других приложений (нужно для запуска VPN из фона).
-    val canDrawOverlays: Boolean = true,
 )
 
 /** Полный иммутабельный снимок состояния главного экрана. */

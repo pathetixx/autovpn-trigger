@@ -71,17 +71,4 @@ object PermissionUtils {
         Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
             data = Uri.parse("package:${context.packageName}")
         }
-
-    /**
-     * true = есть «показ поверх других приложений». Это разрешение снимает запрет
-     * Background Activity Launch (Android 10+): без него startActivity(VPN) из сервиса
-     * система тихо игнорирует — самая частая причина «нажал, но ничего не открылось».
-     */
-    fun canDrawOverlays(context: Context): Boolean = Settings.canDrawOverlays(context)
-
-    fun manageOverlayPermissionIntent(context: Context): Intent =
-        Intent(
-            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-            Uri.parse("package:${context.packageName}"),
-        )
 }

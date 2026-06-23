@@ -2,16 +2,11 @@ package pw.x4.autovpn.domain.repository
 
 import kotlinx.coroutines.flow.Flow
 import pw.x4.autovpn.domain.model.AutomationSettings
-import pw.x4.autovpn.domain.vpn.LaunchMode
 
 interface SettingsRepository {
     val settings: Flow<AutomationSettings>
     suspend fun setAutomationEnabled(enabled: Boolean)
     suspend fun setVpnPackage(packageName: String?)
-
-    /** Переопределить broadcast-экшен тумблера (по умолчанию — виджет Happ). */
-    suspend fun setToggleAction(action: String)
-
-    /** Сохранить способ коннекта (режим + компонент), найденный в диагностике. */
-    suspend fun setConnectTarget(mode: LaunchMode, component: String?)
+    suspend fun setAutoUpdateEnabled(enabled: Boolean)
+    suspend fun setRespectManualVpn(enabled: Boolean)
 }

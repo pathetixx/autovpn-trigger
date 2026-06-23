@@ -17,14 +17,31 @@ android {
         versionName = "0.1.0"
     }
 
+    // Подпись release-сборки ключом из GH Secrets (env). Стабильный ключ обязателен,
+    // иначе OTA-обновление не встанет поверх (несовпадение подписи). Локально, без env,
+    // signingConfig просто не создаётся — debug собирается как обычно.
+    val keystoreB64 = System.getenv("ANDROID_KEYSTORE_BASE64")
+    signingConfigs {
+        if (!keystoreB64.isNullOrBlank()) {
+            create("release") {
+                val ksFile = java.io.File(System.getProperty("java.io.tmpdir"), "autovpn-release.jks")
+                ksFile.writeBytes(java.util.Base64.getDecoder().decode(keystoreB64))
+                storeFile = ksFile
+                storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("ANDROID_KEY_ALIAS")
+                keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // Для скелета минификацию выключаем, чтобы CI собирал debug/release без R8-сюрпризов.
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.findByName("release")
         }
     }
 
@@ -37,6 +54,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 

@@ -7,7 +7,6 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
-import pw.x4.autovpn.ui.main.MainScreen
 import pw.x4.autovpn.ui.theme.AutoVpnTheme
 
 class MainActivity : ComponentActivity() {
@@ -17,7 +16,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             AutoVpnTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    MainScreen()
+                    AppRoot()
                 }
             }
         }

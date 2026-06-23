@@ -53,6 +53,7 @@ class AppMonitorService : Service() {
     private var lastKnownVpnState: Boolean? = null
     private var lastSyncAt = 0L
     private var transitionUntil = 0L
+    private var ownsVpn = false       // VPN включили МЫ (для режима «уважать ручной VPN»)
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -102,6 +103,7 @@ class AppMonitorService : Service() {
             lastSyncAt = now
         }
         val vpnOn = lastKnownVpnState == true
+        if (!vpnOn) ownsVpn = false // VPN не активен — владеть нечем
 
         when {
             // NeutralApps — наше приложение, сам VPN, системный UI (шторка/Недавние).
@@ -112,12 +114,19 @@ class AppMonitorService : Service() {
 
             // TargetApps + VPN выключен → включаем.
             container.triggerRepository.isTriggerApp(current) -> {
-                if (!vpnOn) applyToggle(vpnPackage, settings.toggleAction, turnOn = true, now)
+                if (!vpnOn) {
+                    applyToggle(vpnPackage, settings.toggleAction, turnOn = true, now)
+                    ownsVpn = true
+                }
             }
 
             // AnyOtherApp + VPN включён → выключаем.
             else -> {
-                if (vpnOn) applyToggle(vpnPackage, settings.toggleAction, turnOn = false, now)
+                if (vpnOn) {
+                    // Режим «уважать ручной VPN»: чужой (не наш) VPN не гасим.
+                    if (settings.respectManualVpn && !ownsVpn) return
+                    applyToggle(vpnPackage, settings.toggleAction, turnOn = false, now)
+                }
             }
         }
     }

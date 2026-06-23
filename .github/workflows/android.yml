@@ -3,37 +3,65 @@ name: Android CI
 on:
   push:
     branches: [ main, master ]
+    tags: [ 'v*' ]
   pull_request:
   workflow_dispatch:
 
 jobs:
   build:
+    # debug-сборка для валидации на push/PR (не на тегах — там релиз ниже)
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-
-      # Качаем ровно ту версию Gradle, под которую заточены AGP/Kotlin, и ей же
-      # генерируем wrapper — так сборка не зависит от версии Gradle на раннере
-      # (бинарь gradle-wrapper.jar в репозиторий не коммитим).
       - name: Bootstrap Gradle 8.11.1
         run: |
           set -e
           curl -sLo /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.11.1-bin.zip
           unzip -q /tmp/gradle.zip -d /tmp
           /tmp/gradle-8.11.1/bin/gradle wrapper --gradle-version 8.11.1
-
       - name: Build debug APK
         run: ./gradlew assembleDebug --stacktrace
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: app-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
+  release:
+    # подписанный release-APK + GitHub Release по тегу vX.Y.Z
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Bootstrap Gradle 8.11.1
+        run: |
+          set -e
+          curl -sLo /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.11.1-bin.zip
+          unzip -q /tmp/gradle.zip -d /tmp
+          /tmp/gradle-8.11.1/bin/gradle wrapper --gradle-version 8.11.1
+      - name: Build signed release APK
+        run: ./gradlew assembleRelease --stacktrace
+      - name: Rename APK
+        run: cp app/build/outputs/apk/release/app-release.apk autovpn-${{ github.ref_name }}.apk
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "${{ github.ref_name }}" "autovpn-${{ github.ref_name }}.apk" --title "${{ github.ref_name }}" --generate-notes

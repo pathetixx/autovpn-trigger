@@ -28,10 +28,9 @@
     <!-- Выход из-под Doze/энергосбережения, чтобы система не душила foreground-службу. -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
-    <!-- КЛЮЧЕВОЕ для запуска: с Android 10 нельзя стартовать Activity из фона.
-         «Показ поверх других приложений» снимает это ограничение — без него
-         startActivity(VPN) из сервиса молча игнорируется системой. -->
-    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- OTA: качаем релиз с GitHub и отдаём APK системному установщику. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- Нужно, чтобы перечислить установленные приложения для списка/выбора VPN.
          На Google Play требует декларации; для приватного сайдлоада — ок. -->
@@ -75,5 +74,16 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
+
+        <!-- OTA: отдаёт скачанный APK системному установщику. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 </manifest>

@@ -8,7 +8,6 @@ import kotlinx.coroutines.flow.map
 import pw.x4.autovpn.data.local.SettingsKeys
 import pw.x4.autovpn.domain.model.AutomationSettings
 import pw.x4.autovpn.domain.repository.SettingsRepository
-import pw.x4.autovpn.domain.vpn.LaunchMode
 
 class SettingsRepositoryImpl(
     private val dataStore: DataStore<Preferences>,
@@ -20,10 +19,8 @@ class SettingsRepositoryImpl(
             vpnPackage = prefs[SettingsKeys.VPN_PACKAGE],
             toggleAction = prefs[SettingsKeys.TOGGLE_ACTION]
                 ?: AutomationSettings.DEFAULT_TOGGLE_ACTION,
-            connectMode = prefs[SettingsKeys.CONNECT_MODE]
-                ?.let { runCatching { LaunchMode.valueOf(it) }.getOrNull() }
-                ?: LaunchMode.OPEN_APP,
-            connectComponent = prefs[SettingsKeys.CONNECT_COMPONENT],
+            autoUpdateEnabled = prefs[SettingsKeys.AUTO_UPDATE] ?: true,
+            respectManualVpn = prefs[SettingsKeys.RESPECT_MANUAL_VPN] ?: false,
         )
     }
 
@@ -38,15 +35,11 @@ class SettingsRepositoryImpl(
         }
     }
 
-    override suspend fun setToggleAction(action: String) {
-        dataStore.edit { it[SettingsKeys.TOGGLE_ACTION] = action }
+    override suspend fun setAutoUpdateEnabled(enabled: Boolean) {
+        dataStore.edit { it[SettingsKeys.AUTO_UPDATE] = enabled }
     }
 
-    override suspend fun setConnectTarget(mode: LaunchMode, component: String?) {
-        dataStore.edit { prefs ->
-            prefs[SettingsKeys.CONNECT_MODE] = mode.name
-            if (component.isNullOrBlank()) prefs.remove(SettingsKeys.CONNECT_COMPONENT)
-            else prefs[SettingsKeys.CONNECT_COMPONENT] = component
-        }
+    override suspend fun setRespectManualVpn(enabled: Boolean) {
+        dataStore.edit { it[SettingsKeys.RESPECT_MANUAL_VPN] = enabled }
     }
 }

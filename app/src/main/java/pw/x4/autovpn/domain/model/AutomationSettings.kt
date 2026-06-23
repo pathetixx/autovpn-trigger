@@ -1,7 +1,5 @@
 package pw.x4.autovpn.domain.model
 
-import pw.x4.autovpn.domain.vpn.LaunchMode
-
 /** Глобальные настройки автоматизации. */
 data class AutomationSettings(
     val automationEnabled: Boolean = false,
@@ -9,9 +7,13 @@ data class AutomationSettings(
     val vpnPackage: String? = null,
     /** Broadcast-экшен тумблера VPN. По умолчанию — виджет Happ. */
     val toggleAction: String = DEFAULT_TOGGLE_ACTION,
-    /** Поля диагностики (запасной путь «launch/silent-компонент»), основной поток их не использует. */
-    val connectMode: LaunchMode = LaunchMode.OPEN_APP,
-    val connectComponent: String? = null,
+    /** Проверять обновления при запуске. */
+    val autoUpdateEnabled: Boolean = true,
+    /**
+     * true → не трогаем VPN, включённый вручную (не нами): «ручной VPN на всё вне правил».
+     * false → жёсткий детерминизм: в не-target приложении VPN выключается, кто бы его ни включил.
+     */
+    val respectManualVpn: Boolean = false,
 ) {
     companion object {
         /** Имитация нажатия виджета Happ — фоновый тумблер VPN без UI. */
