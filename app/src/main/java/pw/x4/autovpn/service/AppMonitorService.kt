@@ -1,5 +1,6 @@
 package pw.x4.autovpn.service
 
+import android.app.AlarmManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -28,32 +29,23 @@ import pw.x4.autovpn.AutoVpnApp
 import pw.x4.autovpn.R
 import pw.x4.autovpn.domain.model.AutomationSettings
 import pw.x4.autovpn.ui.MainActivity
-import pw.x4.autovpn.util.VpnStateChecker
+import pw.x4.autovpn.util.VpnStateMonitor
 
 /**
- * Ядро автоматизации — двусторонний конечный автомат.
- *
- * Каждые POLL_INTERVAL_MS:
- *  1) узнаём приложение на переднем плане;
- *  2) считаем НУЖНОЕ состояние VPN: вошли в триггер → ON, иначе → OFF;
- *  3) сверяем с ФАКТИЧЕСКИМ (ConnectivityManager / TRANSPORT_VPN);
- *  4) если расходятся — шлём broadcast-тумблер Happ.
- *
- * Тумблер инвертирует состояние, поэтому критично слать его ТОЛЬКО при рассинхроне,
- * иначе выключим рабочий VPN. Плюс защита от дребезга: нейтральные экраны игнорим,
- * выключение — с дебаунсом, после любого тумбла — кулдаун (ждём, пока VPN устаканится).
+ * Ядро автоматизации. Foreground-служба раз в POLL_INTERVAL_MS сверяет нужное состояние
+ * VPN с фактическим (VpnStateMonitor, событийно) и при рассинхроне шлёт broadcast-тумблер.
+ * Решение принимает чистый [AutomationDecider]. Тумблер инвертирует — после отправки
+ * держим кулдаун, пока состояние не устаканится.
  */
 class AppMonitorService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val container by lazy { (application as AutoVpnApp).container }
+    private val vpnState by lazy { VpnStateMonitor(this) }
 
-    // Локальный кэш состояния VPN — решения строим на нём, реальный CM дёргаем лишь
-    // периодически (ловим ручное вкл/выкл) и не во время «перехода» после тумбла.
-    private var lastKnownVpnState: Boolean? = null
-    private var lastSyncAt = 0L
-    private var transitionUntil = 0L
     private var ownsVpn = false       // VPN включили МЫ (для режима «уважать ручной VPN»)
+    private var cooldownUntil = 0L
+    private var statusText = "Слежу за приложениями"
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -64,9 +56,18 @@ class AppMonitorService : Service() {
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
             } else 0
         ServiceCompat.startForeground(this, NOTIFICATION_ID, buildNotification(), fgsType)
+        vpnState.start()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_STOP) {
+            // «Стоп» из уведомления — выключаем автоматизацию и гасим службу.
+            scope.launch {
+                container.settingsRepository.setAutomationEnabled(false)
+                stopSelf()
+            }
+            return START_NOT_STICKY
+        }
         startMonitoring()
         return START_STICKY
     }
@@ -85,61 +86,63 @@ class AppMonitorService : Service() {
         }
     }
 
-    /**
-     * Один такт автомата — строгая детерминированная логика Target / Neutral / Other.
-     * Без дебаунса: сама категоризация фокусного пакета гасит дребезг.
-     */
     private suspend fun evaluate(settings: AutomationSettings) {
-        val vpnPackage = settings.vpnPackage ?: return // нечего тумблить
+        val vpnPackage = settings.vpnPackage ?: return
         val current = container.foregroundAppDetector.currentForegroundPackage() ?: return
         val now = SystemClock.elapsedRealtime()
+        if (now < cooldownUntil) return // после тумбла ждём, пока VPN переключится
 
-        // Синхронизация кэша с реальным состоянием: при старте, периодически (ловим
-        // ручное вкл/выкл) — но НЕ во время перехода после тумбла (CM ещё врёт).
-        if (lastKnownVpnState == null ||
-            (now >= transitionUntil && now - lastSyncAt >= SYNC_INTERVAL_MS)
-        ) {
-            lastKnownVpnState = VpnStateChecker.isVpnActive(this)
-            lastSyncAt = now
-        }
-        val vpnOn = lastKnownVpnState == true
-        if (!vpnOn) ownsVpn = false // VPN не активен — владеть нечем
+        val vpnOn = vpnState.isActive
+        if (!vpnOn) ownsVpn = false
 
-        when {
-            // NeutralApps — наше приложение, сам VPN, системный UI (шторка/Недавние).
-            // Состояние не трогаем, чтобы они не сбивали логику.
-            current == packageName ||
-                current == vpnPackage ||
-                current == SYSTEM_UI_PACKAGE -> return
-
-            // TargetApps + VPN выключен → включаем.
-            container.triggerRepository.isTriggerApp(current) -> {
-                if (!vpnOn) {
-                    applyToggle(vpnPackage, settings.toggleAction, turnOn = true, now)
-                    ownsVpn = true
-                }
+        val action = AutomationDecider.decide(
+            isNeutral = isNeutral(current, vpnPackage),
+            isTrigger = container.triggerRepository.isTriggerApp(current),
+            vpnOn = vpnOn,
+            respectManualVpn = settings.respectManualVpn,
+            ownsVpn = ownsVpn,
+        )
+        when (action) {
+            VpnAction.NONE -> Unit
+            VpnAction.TURN_ON -> {
+                sendToggle(vpnPackage, settings.toggleAction, now)
+                ownsVpn = true
+                updateNotification("VPN включён")
             }
-
-            // AnyOtherApp + VPN включён → выключаем.
-            else -> {
-                if (vpnOn) {
-                    // Режим «уважать ручной VPN»: чужой (не наш) VPN не гасим.
-                    if (settings.respectManualVpn && !ownsVpn) return
-                    applyToggle(vpnPackage, settings.toggleAction, turnOn = false, now)
-                }
+            VpnAction.TURN_OFF -> {
+                sendToggle(vpnPackage, settings.toggleAction, now)
+                ownsVpn = false
+                updateNotification("VPN выключен")
             }
         }
     }
 
-    private suspend fun applyToggle(vpnPackage: String, action: String, turnOn: Boolean, now: Long) {
-        container.broadcastVpnTrigger.sendToggle(vpnPackage, action)
-        lastKnownVpnState = turnOn          // обновляем кэш сразу после отправки
-        transitionUntil = now + TRANSITION_MS
-        lastSyncAt = now
-        toast(if (turnOn) "VPN: включаю" else "VPN: выключаю")
+    private suspend fun sendToggle(vpnPackage: String, toggleAction: String, now: Long) {
+        container.broadcastVpnTrigger.sendToggle(vpnPackage, toggleAction)
+        cooldownUntil = now + TOGGLE_COOLDOWN_MS
+        toast("VPN: переключаю")
+    }
+
+    /** Экраны, которые не должны влиять на состояние VPN. */
+    private fun isNeutral(pkg: String, vpnPackage: String): Boolean =
+        pkg == packageName || pkg == vpnPackage || pkg == SYSTEM_UI_PACKAGE
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        // Пользователь смахнул приложение из «Недавних» — агрессивные OEM валят службу.
+        // Планируем рестарт через AlarmManager (foreground-service).
+        val restart = PendingIntent.getForegroundService(
+            this,
+            REQ_RESTART,
+            Intent(this, AppMonitorService::class.java),
+            PendingIntent.FLAG_IMMUTABLE,
+        )
+        getSystemService(AlarmManager::class.java)
+            ?.set(AlarmManager.RTC, System.currentTimeMillis() + RESTART_DELAY_MS, restart)
+        super.onTaskRemoved(rootIntent)
     }
 
     override fun onDestroy() {
+        vpnState.stop()
         scope.cancel()
         super.onDestroy()
     }
@@ -150,6 +153,12 @@ class AppMonitorService : Service() {
 
     // ── Уведомление ────────────────────────────────────────────────────────────
 
+    private fun updateNotification(status: String) {
+        statusText = status
+        getSystemService(NotificationManager::class.java)
+            .notify(NOTIFICATION_ID, buildNotification())
+    }
+
     private fun buildNotification(): Notification {
         ensureChannel()
         val openApp = PendingIntent.getActivity(
@@ -158,12 +167,19 @@ class AppMonitorService : Service() {
             Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE,
         )
+        val stop = PendingIntent.getService(
+            this,
+            REQ_STOP,
+            Intent(this, AppMonitorService::class.java).setAction(ACTION_STOP),
+            PendingIntent.FLAG_IMMUTABLE,
+        )
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(getString(R.string.notif_title))
-            .setContentText(getString(R.string.notif_text))
+            .setContentText(statusText)
             .setSmallIcon(R.drawable.ic_notification)
             .setOngoing(true)
             .setContentIntent(openApp)
+            .addAction(0, "Стоп", stop)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
     }
@@ -184,10 +200,13 @@ class AppMonitorService : Service() {
     companion object {
         private const val NOTIFICATION_ID = 1001
         private const val CHANNEL_ID = "vpn_automation"
-        private const val POLL_INTERVAL_MS = 1_500L     // 1.5с достаточно; Target/Neutral/Other сам гасит дребезг
-        private const val SYNC_INTERVAL_MS = 4_500L     // как часто сверяем кэш с реальным CM (ловим ручное вкл/выкл)
-        private const val TRANSITION_MS = 7_000L        // после тумбла CM врёт (Happ коннектится) — верим кэшу
+        private const val POLL_INTERVAL_MS = 1_500L
+        private const val TOGGLE_COOLDOWN_MS = 8_000L
+        private const val RESTART_DELAY_MS = 2_000L
         private const val SYSTEM_UI_PACKAGE = "com.android.systemui"
+        private const val REQ_STOP = 2
+        private const val REQ_RESTART = 3
+        const val ACTION_STOP = "pw.x4.autovpn.action.STOP"
 
         fun start(context: Context) {
             ContextCompat.startForegroundService(

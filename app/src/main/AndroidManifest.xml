@@ -66,6 +66,18 @@
                 android:value="foreground_app_monitor_for_vpn_automation" />
         </service>
 
+        <!-- Плитка быстрых настроек: пауза/возобновление автоматизации из шторки. -->
+        <service
+            android:name=".service.AutomationTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_notification"
+            android:label="AutoVPN"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
         <receiver
             android:name=".service.BootReceiver"
             android:enabled="true"

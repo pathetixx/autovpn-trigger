@@ -11,6 +11,18 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 
+/** Сравнение semver "x.y.z": true, если remote строго больше current. Top-level — тестируемо. */
+internal fun isNewerVersion(remote: String, current: String): Boolean {
+    val r = remote.split(".")
+    val c = current.split(".")
+    for (i in 0 until maxOf(r.size, c.size)) {
+        val rv = r.getOrNull(i)?.toIntOrNull() ?: 0
+        val cv = c.getOrNull(i)?.toIntOrNull() ?: 0
+        if (rv != cv) return rv > cv
+    }
+    return false
+}
+
 /** Информация о доступном релизе. */
 data class UpdateInfo(
     val versionName: String,
@@ -29,7 +41,7 @@ class UpdateManager(private val context: Context) {
         val json = httpGet(LATEST_RELEASE_API)
         val release = JSONObject(json)
         val remoteVersion = release.getString("tag_name").removePrefix("v")
-        if (!isNewer(remoteVersion, BuildConfig.VERSION_NAME)) return@withContext null
+        if (!isNewerVersion(remoteVersion, BuildConfig.VERSION_NAME)) return@withContext null
 
         val assets = release.getJSONArray("assets")
         var apkUrl: String? = null
@@ -72,18 +84,6 @@ class UpdateManager(private val context: Context) {
             readTimeout = TIMEOUT_MS
         }
         return conn.inputStream.bufferedReader().use { it.readText() }
-    }
-
-    /** Сравнение semver "x.y.z": true, если remote строго больше current. */
-    private fun isNewer(remote: String, current: String): Boolean {
-        val r = remote.split(".")
-        val c = current.split(".")
-        for (i in 0 until maxOf(r.size, c.size)) {
-            val rv = r.getOrNull(i)?.toIntOrNull() ?: 0
-            val cv = c.getOrNull(i)?.toIntOrNull() ?: 0
-            if (rv != cv) return rv > cv
-        }
-        return false
     }
 
     private companion object {

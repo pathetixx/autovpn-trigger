@@ -13,11 +13,14 @@ android {
     compileSdk = 35
 
     defaultConfig {
+        val verName = "1.0.0"
         applicationId = "pw.x4.autovpn"
         minSdk = 26          // Android 8.0 — UsageStatsManager и adaptive-иконки доступны
         targetSdk = 35       // Android 15
-        versionCode = 1
-        versionName = "0.1.0"
+        versionName = verName
+        // Монотонный versionCode из versionName: major*10000 + minor*100 + patch.
+        // Без роста versionCode система не считает APK обновлением — ломает OTA.
+        versionCode = verName.split(".").let { it[0].toInt() * 10000 + it[1].toInt() * 100 + it[2].toInt() }
     }
 
     // Подпись release-сборки ключом из GH Secrets (env). Стабильный ключ обязателен,
@@ -85,4 +88,6 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
 
     implementation(libs.kotlinx.coroutines.android)
+
+    testImplementation(libs.junit)
 }
