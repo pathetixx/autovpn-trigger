@@ -1,3 +1,6 @@
+import java.io.File
+import java.util.Base64
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -24,8 +27,8 @@ android {
     signingConfigs {
         if (!keystoreB64.isNullOrBlank()) {
             create("release") {
-                val ksFile = java.io.File(System.getProperty("java.io.tmpdir"), "autovpn-release.jks")
-                ksFile.writeBytes(java.util.Base64.getDecoder().decode(keystoreB64))
+                val ksFile = File(System.getProperty("java.io.tmpdir"), "autovpn-release.jks")
+                ksFile.writeBytes(Base64.getDecoder().decode(keystoreB64))
                 storeFile = ksFile
                 storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
                 keyAlias = System.getenv("ANDROID_KEY_ALIAS")
