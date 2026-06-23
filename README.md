@@ -1,32 +1,24 @@
 # AutoVPN
 
-Лёгкий аналог iOS Shortcuts под одну задачу: **автоматически включать VPN при открытии
-выбранных приложений** (Instagram и т.п.) и выключать в остальных — без ручных действий
-и без всплывающего окна VPN-клиента.
-
-Управление VPN идёт через **фоновый broadcast-тумблер** Happ, поэтому VPN поднимается
-прямо в фоне (UI клиента не открывается).
+Аналог iOS Shortcuts под одну задачу: **VPN включается при открытии выбранных приложений**
+(Instagram и т.п.) и выключается в остальных. Управление через фоновый broadcast-тумблер
+Happ — без всплывающего окна клиента.
 
 ## Как это работает
 
-- **Мониторинг.** Foreground-служба (`AppMonitorService`) раз в 1.5 c через
-  `UsageStatsManager` узнаёт приложение на переднем плане.
-- **Тихий коннект.** Вместо запуска UI шлём targeted broadcast
-  `com.happproxy.action.widget.click` на пакет `com.happproxy` — имитация нажатия
-  виджета Happ. Это **тумблер** (инвертирует состояние).
-- **Состояние VPN** читаем через `ConnectivityManager` (есть ли сеть с
-  `NetworkCapabilities.TRANSPORT_VPN`), плюс локальный кэш — чтобы не слать лишних
-  broadcast'ов и не словить гонку, пока Happ переключается.
-- **Детерминированный автомат** по фокусному пакету:
+- Foreground-служба раз в 1.5 c через `UsageStatsManager` определяет приложение на переднем плане.
+- Коннект — targeted broadcast `com.happproxy.action.widget.click` на пакет `com.happproxy`
+  (тумблер, инвертирует состояние).
+- Состояние VPN — через `ConnectivityManager` (`TRANSPORT_VPN`) + локальный кэш.
+- Автомат по фокусному пакету:
 
   | Категория | Условие | Действие |
   |---|---|---|
   | **Target** (из списка) | VPN выключен | включить |
-  | **Neutral** (наше приложение / Happ / `com.android.systemui`) | — | ничего |
-  | **AnyOther** (любое прочее: лаунчер, браузер, мессенджер) | VPN включён | выключить |
+  | **Neutral** (само приложение / Happ / `com.android.systemui`) | — | — |
+  | **AnyOther** (всё прочее) | VPN включён | выключить |
 
-  То есть переключение из Instagram в обычное приложение сразу гасит VPN; переход
-  между двумя target-приложениями VPN не трогает.
+  Переход между двумя target-приложениями VPN не трогает.
 
 ## Установка
 
@@ -70,19 +62,11 @@ ui/       AppRoot (нижняя навигация) → HomeScreen / SettingsScr
 AutoVpnApp.kt — ручной DI-контейнер (без Hilt)
 ```
 
-## Сборка и релизы (GitHub Actions)
+## Сборка
 
-Локально не собираем — всё через CI ([`.github/workflows/android.yml`](.github/workflows/android.yml)).
-Wrapper не коммитим: CI качает Gradle 8.11.1 и генерит wrapper сам.
+GitHub Actions:
 
-- **push / PR** → `assembleDebug`, debug-APK в артефактах (валидация компиляции).
-- **тег `vX.Y.Z`** → подписанный `assembleRelease` + автоматический GitHub Release с
-  `autovpn-<tag>.apk`.
+- push / PR → debug-APK в артефактах;
+- тег `vX.Y.Z` → подписанный релиз с APK.
 
-Релиз подписывается стабильным ключом из GitHub Secrets
-(`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`,
-`ANDROID_KEY_PASSWORD`) — стабильная подпись обязательна, иначе OTA-обновление не
-встанет поверх.
-
-**Выпуск новой версии:** поднять `versionName` в [`app/build.gradle.kts`](app/build.gradle.kts)
-и поставить тег `vX.Y.Z` — остальное сделает CI.
+Новая версия: поднять `versionName` в [`app/build.gradle.kts`](app/build.gradle.kts) и поставить тег `vX.Y.Z`.
