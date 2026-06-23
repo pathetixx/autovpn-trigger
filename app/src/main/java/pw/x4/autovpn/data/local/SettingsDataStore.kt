@@ -13,4 +13,6 @@ val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(na
 object SettingsKeys {
     val AUTOMATION_ENABLED = booleanPreferencesKey("automation_enabled")
     val VPN_PACKAGE = stringPreferencesKey("vpn_package")
+    val CONNECT_MODE = stringPreferencesKey("connect_mode")
+    val CONNECT_COMPONENT = stringPreferencesKey("connect_component")
 }

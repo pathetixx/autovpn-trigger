@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.map
 import pw.x4.autovpn.data.local.SettingsKeys
 import pw.x4.autovpn.domain.model.AutomationSettings
 import pw.x4.autovpn.domain.repository.SettingsRepository
+import pw.x4.autovpn.domain.vpn.LaunchMode
 
 class SettingsRepositoryImpl(
     private val dataStore: DataStore<Preferences>,
@@ -17,6 +18,10 @@ class SettingsRepositoryImpl(
         AutomationSettings(
             automationEnabled = prefs[SettingsKeys.AUTOMATION_ENABLED] ?: false,
             vpnPackage = prefs[SettingsKeys.VPN_PACKAGE],
+            connectMode = prefs[SettingsKeys.CONNECT_MODE]
+                ?.let { runCatching { LaunchMode.valueOf(it) }.getOrNull() }
+                ?: LaunchMode.OPEN_APP,
+            connectComponent = prefs[SettingsKeys.CONNECT_COMPONENT],
         )
     }
 
@@ -28,6 +33,14 @@ class SettingsRepositoryImpl(
         dataStore.edit { prefs ->
             if (packageName.isNullOrBlank()) prefs.remove(SettingsKeys.VPN_PACKAGE)
             else prefs[SettingsKeys.VPN_PACKAGE] = packageName
+        }
+    }
+
+    override suspend fun setConnectTarget(mode: LaunchMode, component: String?) {
+        dataStore.edit { prefs ->
+            prefs[SettingsKeys.CONNECT_MODE] = mode.name
+            if (component.isNullOrBlank()) prefs.remove(SettingsKeys.CONNECT_COMPONENT)
+            else prefs[SettingsKeys.CONNECT_COMPONENT] = component
         }
     }
 }

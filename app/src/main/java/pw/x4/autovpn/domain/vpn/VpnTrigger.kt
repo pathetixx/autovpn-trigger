@@ -1,26 +1,32 @@
 package pw.x4.autovpn.domain.vpn
 
 /**
- * Конфиг построения Intent для запуска VPN. Вынесен в отдельную модель, чтобы под
- * каждый VPN-сервис можно было задать свой Action / данные / Extras БЕЗ правок ядра.
- *
- * Примеры:
- *  - Happ по deeplink:  VpnIntentConfig(action = Intent.ACTION_VIEW, dataUri = "happ://")
- *  - просто открыть приложение: VpnIntentConfig() — берётся launch-intent пакета.
+ * Способ доставки сигнала VPN-приложению. Разные VPN выставляют наружу разное:
+ * у кого-то deeplink, у кого-то фоновый Service/Receiver (коннект без окна).
  */
-data class VpnIntentConfig(
-    val action: String? = null,            // null → стандартный launch-intent приложения
-    val dataUri: String? = null,           // напр. deeplink "happ://connect"
-    val category: String? = null,
-    val extras: Map<String, String> = emptyMap(),
-    val explicitPackage: Boolean = true,   // true = явный Intent (setPackage), false = неявный
-)
+enum class LaunchMode {
+    OPEN_APP,            // launch-intent приложения — VPN откроется ПОВЕРХ (видно окно)
+    DEEPLINK,            // ACTION_VIEW happ://... — обычно тоже открывает окно
+    ACTIVITY,            // явная Activity по имени класса — окно мелькнёт
+    SERVICE,             // явный Service — фон, БЕЗ окна
+    FOREGROUND_SERVICE,  // явный foreground-Service — фон, БЕЗ окна
+    BROADCAST,           // явный Receiver — фон, БЕЗ окна
+}
 
 /**
- * Абстракция «чем поднимаем VPN». Ядро (сервис) зависит только от этого интерфейса —
- * завтра можно добавить реализацию через Accessibility/shell, не трогая логику мониторинга.
+ * Конфиг построения Intent. Под каждый VPN-сервис можно задать свой режим/компонент/
+ * Action/данные/Extras БЕЗ правок ядра.
  */
+data class VpnIntentConfig(
+    val mode: LaunchMode = LaunchMode.OPEN_APP,
+    val componentClass: String? = null, // FQN экспортированного компонента (для ACTIVITY/SERVICE/BROADCAST)
+    val action: String? = null,
+    val dataUri: String? = null,        // напр. deeplink "happ://..."
+    val extras: Map<String, String> = emptyMap(),
+)
+
+/** Абстракция «чем поднимаем VPN». Ядро зависит только от этого интерфейса. */
 interface VpnTrigger {
-    /** @return true, если Intent успешно отправлен системе. */
+    /** @return true, если запрос успешно отправлен системе (НЕ гарантирует, что VPN реально включился). */
     fun launch(vpnPackage: String?, config: VpnIntentConfig = VpnIntentConfig()): Boolean
 }

@@ -26,6 +26,7 @@ import kotlinx.coroutines.withContext
 import pw.x4.autovpn.AutoVpnApp
 import pw.x4.autovpn.R
 import pw.x4.autovpn.domain.model.AutomationSettings
+import pw.x4.autovpn.domain.vpn.VpnIntentConfig
 import pw.x4.autovpn.ui.MainActivity
 
 /**
@@ -96,7 +97,15 @@ class AppMonitorService : Service() {
 
         if (container.triggerRepository.isTriggerApp(packageName)) {
             if (packageName != lastTriggeredPackage) {
-                val launched = container.vpnTrigger.launch(settings.vpnPackage)
+                // Способ коннекта берём из настроек: либо «просто открыть» (OPEN_APP),
+                // либо тихий компонент (Service/Receiver), назначенный в Диагностике.
+                val launched = container.vpnTrigger.launch(
+                    settings.vpnPackage,
+                    VpnIntentConfig(
+                        mode = settings.connectMode,
+                        componentClass = settings.connectComponent,
+                    ),
+                )
                 // Диагностика. ВАЖНО: при блокировке запуска из фона startActivity НЕ кидает
                 // исключение — launched=true, но окно не открывается (нужен overlay-доступ).
                 // launched=false = VPN-приложение реально не найдено по пакету.

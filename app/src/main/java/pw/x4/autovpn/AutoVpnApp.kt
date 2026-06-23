@@ -3,6 +3,7 @@ package pw.x4.autovpn
 import android.app.Application
 import android.app.usage.UsageStatsManager
 import android.content.Context
+import pw.x4.autovpn.data.installed.AppComponentScanner
 import pw.x4.autovpn.data.installed.InstalledAppsProvider
 import pw.x4.autovpn.data.local.AppDatabase
 import pw.x4.autovpn.data.local.settingsDataStore
@@ -31,6 +32,9 @@ class AppContainer(context: Context) {
     }
     val installedAppsProvider by lazy {
         InstalledAppsProvider(appContext.packageManager)
+    }
+    val appComponentScanner by lazy {
+        AppComponentScanner(appContext.packageManager)
     }
     val foregroundAppDetector by lazy {
         // getSystemService(Class) помечен @Nullable — на реальном устройстве сервис есть всегда.

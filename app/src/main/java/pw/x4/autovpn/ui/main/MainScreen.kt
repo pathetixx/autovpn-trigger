@@ -45,6 +45,7 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.lifecycle.Lifecycle
 import pw.x4.autovpn.domain.model.AppInfo
+import pw.x4.autovpn.ui.diagnostics.DiagnosticsScreen
 import pw.x4.autovpn.util.PermissionUtils
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -78,6 +79,16 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
     ) { viewModel.refreshPermissions() }
 
     var showVpnPicker by remember { mutableStateOf(false) }
+    var showDiagnostics by remember { mutableStateOf(false) }
+
+    // Все remember/launcher объявлены выше — ветвление ниже не нарушает правил композиции.
+    if (showDiagnostics) {
+        DiagnosticsScreen(
+            vpnPackage = state.settings.vpnPackage,
+            onBack = { showDiagnostics = false },
+        )
+        return
+    }
 
     Scaffold(
         topBar = { TopAppBar(title = { Text("AutoVPN") }) },
@@ -127,6 +138,11 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                 vpnLabel = state.vpnAppLabel ?: state.settings.vpnPackage,
                 onPick = { showVpnPicker = true },
             )
+
+            TextButton(
+                onClick = { showDiagnostics = true },
+                modifier = Modifier.padding(horizontal = 8.dp),
+            ) { Text("🔧 Настроить тихий коннект (без окна VPN)") }
 
             HorizontalDivider()
 
